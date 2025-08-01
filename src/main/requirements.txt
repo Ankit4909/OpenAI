@@ -5,3 +5,4 @@ langchain
 langchain_community
 PyPDF2
 sentence_transformers
+faiss-cpu
