@@ -4,3 +4,4 @@ python-dotenv
 langchain
 langchain_community
 PyPDF2
+sentence_transformers
