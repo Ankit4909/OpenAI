@@ -15,7 +15,7 @@ import openai
 match=""
 user_question=""
 
-load_dotenv("properties.env")
+load_dotenv("resources/properties.env")
 
 #Base URl
 openai.base_url="https://openrouter.ai/api/v1"
