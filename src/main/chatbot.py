@@ -20,7 +20,7 @@ load_dotenv("resources/properties.env")
 #Base URl
 openai.base_url="https://openrouter.ai/api/v1"
 
-OPENAI_API_KEY=os.getenv("OPENAI_API_KEY") #Open router api key
+OPENAI_API_KEY=os.getenv("OPENAI_API_KEY") or st.secrets["OPENAI_API_KEY"] #Open router api key
 
 
 
