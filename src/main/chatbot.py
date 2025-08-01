@@ -1,83 +1,78 @@
-import openai
 import os
-
+import openai
 import streamlit as st
+from dotenv import load_dotenv
 from PyPDF2 import PdfReader
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
 from langchain_community.chat_models import ChatOpenAI
-from langchain.embeddings import HuggingFaceEmbeddings
-from dotenv import load_dotenv
-import openai
 
-match=""
-user_question=""
-
+# Load API keys and env vars
 load_dotenv("resources/properties.env")
+openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+openai.base_url = "https://openrouter.ai/api/v1"
 
-#Base URl
-openai.base_url="https://openrouter.ai/api/v1"
+# Streamlit config
+st.set_page_config(page_title="Q&A ChatBot", layout="wide")
+st.title("Q&A ChatBot")
 
-OPENAI_API_KEY=os.getenv("OPENAI_API_KEY") or st.secrets["OPENAI_API_KEY"] #Open router api key
+with st.sidebar:
+    st.header("📄 Upload Your PDF")
+    uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
+# Session state for chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []  # {"role": "user"/"assistant", "content": "..."}
 
+# If a file is uploaded
+if uploaded_file:
+    # Extract and chunk PDF content
+    reader = PdfReader(uploaded_file)
+    text = "".join([page.extract_text() or "" for page in reader.pages])
 
-#Upload PDF files
-st.header("Ask about Indian Constitution")
-
-with  st.sidebar:
-    st.title("Your Documents")
-    file = st.file_uploader(" Upload a PDf file and start asking questions", type="pdf")
-
-#Extract the text
-if file is not None:
-    pdf_reader = PdfReader(file)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-        #st.write(text)
-
-#Break it into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators="\n",
-        chunk_size=1000,
-        chunk_overlap=150,
-        length_function=len
-    )
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = text_splitter.split_text(text)
-    #st.write(chunks)
 
-# generating embedding
-    #embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY,
-                           #       openai_api_base="https://openrouter.ai/api/v1",
-                                #  model="HuggingFaceEmbeddings")
-
+    # Generate vector DB
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    #st.write(embeddings)
-
-    # creating vector store - FAISS
     vector_store = FAISS.from_texts(chunks, embeddings)
 
-# get user question
-    user_question = st.text_input("How can I help you?")
+    # Initialize LLM
+    llm = ChatOpenAI(
+        openai_api_key=openai.api_key,
+        temperature=0,
+        max_tokens=1000,
+        model_name="openai/gpt-3.5-turbo",
+        openai_api_base="https://openrouter.ai/api/v1"
+    )
+    qa_chain = load_qa_chain(llm, chain_type="stuff")
 
-    # do similarity search
-    if user_question:
-        match = vector_store.similarity_search(user_question)
-        #st.write(match)
+    # Display previous messages
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-llm = ChatOpenAI(
-            openai_api_key = OPENAI_API_KEY,
-            temperature = 0,
-            max_tokens = 1000,
-            model_name = "openai/gpt-3.5-turbo",
-            openai_api_base="https://openrouter.ai/api/v1"
-        )
+    # Chat input
+    user_input = st.chat_input("Ask me anything about the uploaded PDF...")
 
-chain = load_qa_chain(llm, chain_type="stuff")
+    if user_input:
+        # Append user message
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
 
-response = chain.run(input_documents = match, question = user_question)
+        # Perform vector search and answer
+        with st.spinner("Thinking..."):
+            similar_docs = vector_store.similarity_search(user_input)
+            response = qa_chain.run(input_documents=similar_docs, question=user_input)
 
-st.write(response)
+        # Append assistant response
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant"):
+            st.markdown(response)
+
+else:
+    st.info("👈 Upload a PDF file from the sidebar to get started.")
