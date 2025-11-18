@@ -4,6 +4,7 @@ python-dotenv
 langchain
 langchain-core
 langchain-community
+langchain-openai
 langchain-text-splitters
 PyPDF2
 sentence_transformers
