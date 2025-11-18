@@ -7,7 +7,8 @@ from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.chains.question_answering import load_qa_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_openai import ChatOpenAI
 from langchain_community.chat_models import ChatOpenAI
 
 # Load API keys and env vars
@@ -48,7 +49,8 @@ if uploaded_file:
         model_name="openai/gpt-3.5-turbo",
         openai_api_base="https://openrouter.ai/api/v1"
     )
-    qa_chain = load_qa_chain(llm, chain_type="stuff")
+    
+    qa_chain = create_stuff_documents_chain(llm)
 
     # Display previous messages
     for msg in st.session_state.messages:
