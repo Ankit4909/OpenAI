@@ -3,26 +3,27 @@ import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 
-# LLM
+# NEW OpenAI SDK
+from openai import OpenAI
+
+# LangChain Components
 from langchain_openai import ChatOpenAI
-
-# Text Splitting
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-# Embeddings + Vectorstore
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
-# New Document QA chain
-from langchain_core.documents import Document
 from langchain_core.runnables import RunnablePassthrough
 
-# Load API keys and env vars
-load_dotenv("resources/properties.env")
-openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-openai.base_url = "https://openrouter.ai/api/v1"
 
-# Streamlit config
+# 🔹 Environment Variables
+load_dotenv("resources/properties.env")
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY"),
+    base_url="https://openrouter.ai/api/v1",
+)
+
+# Streamlit UI
 st.set_page_config(page_title="Q&A ChatBot", layout="wide")
 st.title("Q&A ChatBot")
 
@@ -30,57 +31,70 @@ with st.sidebar:
     st.header("📄 Upload Your PDF")
     uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
-# Session state for chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []  # {"role": "user"/"assistant", "content": "..."}
 
-# If a file is uploaded
+# Chat Memory
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+
+# If PDF uploaded
 if uploaded_file:
-    # Extract and chunk PDF content
+    # Extract PDF text
     reader = PdfReader(uploaded_file)
     text = "".join([page.extract_text() or "" for page in reader.pages])
 
+    # Split text into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = text_splitter.split_text(text)
 
-    # Generate vector DB
+    # Embeddings + Vector DB
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vector_store = FAISS.from_texts(chunks, embeddings)
 
-    # Initialize LLM
+    # LLM for answers
     llm = ChatOpenAI(
-        openai_api_key=openai.api_key,
-        temperature=0,
-        max_tokens=1000,
-        model_name="openai/gpt-3.5-turbo",
-        openai_api_base="https://openrouter.ai/api/v1"
+        model="openai/gpt-3.5-turbo",
+        openai_api_key=client.api_key,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0
     )
-    
-    qa_chain = create_stuff_documents_chain(llm)
 
-    # Display previous messages
+    # ❗ LCEL RAG PIPELINE (new chain system)
+    def combine_docs(docs):
+        return "\n\n".join([d.page_content for d in docs])
+
+    rag_chain = (
+        {"context": combine_docs, "question": RunnablePassthrough()}
+        | llm
+    )
+
+    # Show chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Chat input
+    # User Input
     user_input = st.chat_input("Ask me anything about the uploaded PDF...")
 
     if user_input:
-        # Append user message
         st.session_state.messages.append({"role": "user", "content": user_input})
+
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Perform vector search and answer
         with st.spinner("Thinking..."):
             similar_docs = vector_store.similarity_search(user_input)
-            response = qa_chain.run(input_documents=similar_docs, question=user_input)
 
-        # Append assistant response
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            # RAG Call
+            response = rag_chain.invoke({
+                "context": similar_docs,
+                "question": user_input
+            })
+
+        st.session_state.messages.append({"role": "assistant", "content": response.content})
+
         with st.chat_message("assistant"):
-            st.markdown(response)
+            st.markdown(response.content)
 
 else:
     st.info("👈 Upload a PDF file from the sidebar to get started.")
