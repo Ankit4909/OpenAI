@@ -86,8 +86,9 @@ if uploaded_file:
             similar_docs = vector_store.similarity_search(user_input)
 
             # RAG Call
+            
             response = rag_chain.invoke({
-                "context": similar_docs,
+                "context": combine_docs(similar_docs),
                 "question": user_input
             })
 
