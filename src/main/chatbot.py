@@ -1,15 +1,20 @@
 import os
-import openai
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 
+# LLM
+from langchain_openai import ChatOpenAI
+
+# Text Splitting
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# Embeddings + Vectorstore
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+
+# New Document QA chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_openai import ChatOpenAI
-from langchain_community.chat_models import ChatOpenAI
 
 # Load API keys and env vars
 load_dotenv("resources/properties.env")
