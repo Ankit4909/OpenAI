@@ -14,7 +14,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 # New Document QA chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains.combine_documents.base import create_stuff_documents_chain
 
 # Load API keys and env vars
 load_dotenv("resources/properties.env")
